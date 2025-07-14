@@ -33,5 +33,10 @@ PoE settings
 | `-interface` | Port/interface number                                                     |
 | `-enabled`   | PoE state: `0` (off), `1` (on)                                            |
 
+System Information
+| Parameter    | Description                                                               |
+| ------------ | ------------------------------------------------------------------------- |
+| `-sysinfo`   | **Required**: Outputs system information                                  |
+
 # Tested Models
 ZX-AFGW-SWTG218ANS-100
