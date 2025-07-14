@@ -18,17 +18,23 @@ param(
     [int]$interface='-1',
     [Parameter()]
     [int]$enabled='-1',
+    [Parameter()]    
+    [string]$debug = $false,
     # Port Settings Information
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [string]$speed,
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [int]$flow
 )
+if ($debug = $true) {
+    $DebugPreference = 'Continue'
+}
 # Info needed for each page
 $pages = [pscustomobject]@{
     sysinfo = @{
         url = "info.cgi"
         body = @{
+            language = "EN"
         }
     }
     port = @{
@@ -71,6 +77,7 @@ function Send-Request {
         [string]$username,
         [string]$password,
         [string]$selectedpage,
+        [string]$selectedmethod,
         [hashtable]$selectedbody
     )
 
@@ -91,10 +98,9 @@ function Send-Request {
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $cookie = New-Object System.Net.Cookie("admin", $cookieValue, "/", "$url")
     $session.Cookies.Add($cookie)
-
     try {
         $response = Invoke-RestMethod -Uri "http://$url/$selectedpage" `
-            -Method POST `
+            -Method $selectedmethod `
             -Body $selectedbody `
             -WebSession $session `
             -Headers $headers `
@@ -137,7 +143,7 @@ switch ($PSCmdlet.ParameterSetName) {
         $selectedbody = $pages.port.body
         $selectedpage = $pages.port.url
         Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.port.url -selectedbody $pages.port.body
+                                 -selectedpage $pages.port.url -selectedbody $pages.port.body -selectedmethod 'POST'
     }
     'poe' {
         if ($interface -eq -1) {
@@ -151,13 +157,31 @@ switch ($PSCmdlet.ParameterSetName) {
         $selectedbody = $pages.poe.body
         $selectedpage = $pages.poe.url
         Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.poe.url -selectedbody $pages.poe.body
+                                 -selectedpage $pages.poe.url -selectedbody $pages.poe.body -selectedmethod 'POST'
     }
     'sysinfo' {
         $selectedbody = $pages.sysinfo.body
         $selectedpage = $pages.sysinfo.url
-        Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body
+        $html = Send-Request -url $url -username $username -password $password `
+                                 -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body -selectedmethod 'GET'
+        $pattern = '<tr>\s*<th[^>]*>(.*?)</th>\s*<td[^>]*>(.*?)</td>'   # captures TH / TD pairs
+        $propBag = @{}
+        [regex]::Matches($html, $pattern, 'IgnoreCase') | ForEach-Object {
+        $name, $value = $_.Groups[1].Value.Trim(), $_.Groups[2].Value.Trim()
+        $propBag[$name] = $value
+        }
+        # Cast to a nicely typed object
+        $systeminfo = [pscustomobject]@{
+            DeviceModel     = $propBag['Device Model']
+            MACAddress      = $propBag['MAC Address']
+            IPAddress       = $propBag['IP Address']
+            Netmask         = $propBag['Netmask']
+            Gateway         = $propBag['Gateway']
+            FirmwareVersion = $propBag['Firmware Version']
+            FirmwareDate    = [datetime]$propBag['Firmware Date']
+            HardwareVersion = $propBag['Hardware Version']
+        }
+        $systeminfo
     }
 }
 
