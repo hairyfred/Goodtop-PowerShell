@@ -18,6 +18,8 @@ param(
     [int]$interface='-1',
     [Parameter()]
     [int]$enabled='-1',
+    [Parameter()]
+    [int]$save = $false,
     # Port Settings Information
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [string]$speed,
@@ -47,6 +49,13 @@ $pages = [pscustomobject]@{
             cmd = "poe"
         }
     }
+    save = @{
+        url = "save.cgi"
+        body = @{
+            language = "EN"
+            cmd = "save"
+        }
+    }
 }
 function Get-LoginCookie {
     param (
@@ -64,7 +73,17 @@ function Get-LoginCookie {
     Write-Debug "[DEBUG] Hashed login = $hashedlogin"
     return $hashedlogin
 }
-
+function Save-Settings {
+    if ($save -eq $true) {
+        $selectedbody = $pages.save.body
+        $selectedpage = $pages.save.url
+        Send-Request -url $url -username $username -password $password -selectedpage $pages.save.url -selectedbody $pages.save.body -selectedmethod 'POST'
+        Write-Host "[INFO] Settings Saved"
+    }
+    else {
+        Write-Host "[INFO] Remeber to save settings to keep them after reboot. Use -save or manually in the web gui".
+    }
+}
 
 function Send-Request {
     param (
@@ -106,6 +125,7 @@ function Send-Request {
     }
     catch {
         Write-Host "[ERROR] Failed to get response: $_"
+        exit
     }
 }
 # Adds param data
@@ -137,8 +157,8 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.port.body.portid = $interface
         $selectedbody = $pages.port.body
         $selectedpage = $pages.port.url
-        Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.port.url -selectedbody $pages.port.body -selectedmethod 'POST'
+        $response = Send-Request -url $url -username $username -password $password -selectedpage $pages.port.url -selectedbody $pages.port.body -selectedmethod 'POST'
+        Write-Host "[INFO] Settings Applied"
     }
     'poe' {
         if ($interface -eq -1) {
@@ -151,16 +171,14 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.poe.body.portid = $interface
         $selectedbody = $pages.poe.body
         $selectedpage = $pages.poe.url
-        Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.poe.url -selectedbody $pages.poe.body -selectedmethod 'POST'
+        $response = Send-Request -url $url -username $username -password $password -selectedpage $pages.poe.url -selectedbody $pages.poe.body -selectedmethod 'POST'
+        Write-Host "[INFO] Settings Applied"
     }
     'sysinfo' {
         $selectedbody = $pages.sysinfo.body
         $selectedpage = $pages.sysinfo.url
-        $html = Send-Request -url $url -username $username -password $password `
-                                 -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body -selectedmethod 'GET'
+        $html = Send-Request -url $url -username $username -password $password -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body -selectedmethod 'GET'
         $pattern = '<tr>\s*<th[^>]*>(.*?)</th>\s*<td[^>]*>(.*?)</td>'   # captures TH / TD pairs
-        $propBag = @{}
         [regex]::Matches($html, $pattern, 'IgnoreCase') | ForEach-Object {
         $name, $value = $_.Groups[1].Value.Trim(), $_.Groups[2].Value.Trim()
         $propBag[$name] = $value
