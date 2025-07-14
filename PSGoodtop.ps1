@@ -26,8 +26,10 @@ param(
 )
 # Info needed for each page
 $pages = [pscustomobject]@{
-    info = @{
+    sysinfo = @{
         url = "info.cgi"
+        body = @{
+        }
     }
     port = @{
         url = "port.cgi"
@@ -43,6 +45,66 @@ $pages = [pscustomobject]@{
             submit = "apply"
             cmd = "poe"
         }
+    }
+}
+function Get-LoginCookie {
+    param (
+        [string]$username,
+        [string]$password
+    )
+
+    $logincombo = "$username$password"
+
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($logincombo)
+    $hashBytes = $md5.ComputeHash($bytes)
+    $hashedlogin = (-join ($hashBytes | ForEach-Object { $_.ToString("x2") }))
+
+    Write-Host "[DEBUG] Hashed login = $hashedlogin"
+    return $hashedlogin
+}
+
+
+function Send-Request {
+    param (
+        [string]$url,
+        [string]$username,
+        [string]$password,
+        [string]$selectedpage,
+        [hashtable]$selectedbody
+    )
+
+    $cookieValue = Get-LoginCookie -username $username -password $password
+
+    $headers = @{
+        "Host"              = "$url"
+        "Connection"        = "keep-alive"
+        "Cache-Control"     = "max-age=0"
+        "Upgrade-Insecure-Requests" = "1"
+        "Origin"            = "http://$url"
+        "Content-Type"      = "application/x-www-form-urlencoded"
+        "Accept"            = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+        "Referer"           = "http://$url/$selectedpage"
+        "Accept-Encoding"   = "gzip, deflate"
+    }
+
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $cookie = New-Object System.Net.Cookie("admin", $cookieValue, "/", "$url")
+    $session.Cookies.Add($cookie)
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://$url/$selectedpage" `
+            -Method POST `
+            -Body $selectedbody `
+            -WebSession $session `
+            -Headers $headers `
+            -ContentType "application/x-www-form-urlencoded" `
+            -UseBasicParsing
+        return $response
+        Write-Host "[DEBUG] $response"
+    }
+    catch {
+        Write-Host "[ERROR] Failed to get response: $_"
     }
 }
 # Adds param data
@@ -74,7 +136,8 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.port.body.portid = $interface
         $selectedbody = $pages.port.body
         $selectedpage = $pages.port.url
-        Send-Requst()
+        Send-Request -url $url -username $username -password $password `
+                                 -selectedpage $pages.port.url -selectedbody $pages.port.body
     }
     'poe' {
         if ($interface -eq -1) {
@@ -87,50 +150,14 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.poe.body.portid = $interface
         $selectedbody = $pages.poe.body
         $selectedpage = $pages.poe.url
-        Send-Request()
+        Send-Request -url $url -username $username -password $password `
+                                 -selectedpage $pages.poe.url -selectedbody $pages.poe.body
     }
     'sysinfo' {
-        Write-Host "TEMP"
+        $selectedbody = $pages.sysinfo.body
+        $selectedpage = $pages.sysinfo.url
+        Send-Request -url $url -username $username -password $password `
+                                 -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body
     }
 }
 
-function Get-LoginCookie {
-    # Get Login Cookie
-    # Combine username and password
-    $logincombo = "$username$password"
-
-    # Hash with MD5
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($logincombo)
-    $hashBytes = $md5.ComputeHash($bytes)
-    $hashedlogin = (-join ($hashBytes | ForEach-Object { $_.ToString("x2") }))
-    return "$hashedlogin"
-}
-
-function Send-Request {
-    # Headers, some of these are likley not needed and will trim out later
-    $headers = @{
-        "Host" = "$url"
-        "Connection" = "keep-alive"
-        "Cache-Control" = "max-age=0"
-        "Upgrade-Insecure-Requests" = "1"
-        "Origin" = "http://$url"
-        "Content-Type" = "application/x-www-form-urlencoded"
-        "Accept" = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-        "Referer" = "http://$url/$page"
-        "Accept-Encoding" = "gzip, deflate"
-    }
-    # Add Login Cookie
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $cookie = New-Object System.Net.Cookie("admin", (Get-LoginCookie), "/", "$url")
-    $session.Cookies.Add($cookie)
-
-    # Run the command
-    $response = Invoke-RestMethod -Uri "$url/$selectedpage" `
-        -Method POST `
-        -Body $selectedbody `
-        -WebSession $session `
-        -Headers $headers `
-        -ContentType "application/x-www-form-urlencoded" `
-        -UseBasicParsing
-    }
