@@ -16,7 +16,7 @@ Required Global Paramters
 | `-password` | Login password (default: `admin`)                                 |
 | `-url`      | The base domain or IP address of the switch (e.g., `192.168.1.1`) |
 | `-debug`    | Enables debug messages                                            |
-| `-save`     | Saves current configuration (Needed to survive reboots)           |
+| `-save`     | Saves current configuration (default: `0`)                        |
 
 Port Settings
 | Parameter    | Description                                                                            |
