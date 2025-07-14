@@ -15,6 +15,10 @@ Required Global Paramters
 | `-username` | Login username (default: `admin`)                                 |
 | `-password` | Login password (default: `admin`)                                 |
 | `-url`      | The base domain or IP address of the switch (e.g., `192.168.1.1`) |
+
+Optional Global Paramters
+| Parameter   | Description                                                       |
+| ----------- | ------------------------------------------------------------------|
 | `-debug`    | Enables debug messages                                            |
 | `-save`     | Saves current configuration (default: `0`)                        |
 
@@ -34,10 +38,11 @@ PoE settings
 | `-interface` | Port/interface number                                                     |
 | `-enabled`   | PoE state: `0` (off), `1` (on)                                            |
 
-System Information
-| Parameter    | Description                                                               |
-| ------------ | ------------------------------------------------------------------------- |
-| `-sysinfo`   | **Required**: Outputs system information                                  |
+Misc
+| Parameter    | Description                                                      |
+| ------------ | -----------------------------------------------------------------|
+| `-sysinfo`   | Outputs system information                                       |
+| `-saveconfig`| Saves current configuration                                      |
 
 # Tested Models
 ZX-AFGW-SWTG218ANS-100

@@ -7,6 +7,10 @@ param(
     [switch]$poe,
     [Parameter(ParameterSetName = 'sysinfo')]
     [switch]$sysinfo,
+    [Parameter(ParameterSetName = 'backup')]
+    [switch]$backup,
+    [Parameter(ParameterSetName = 'saveconfig')]
+    [switch]$saveconfig,
     # Global Information
     [Parameter(Mandatory)] 
     [string]$username = "admin",
@@ -19,13 +23,15 @@ param(
     [Parameter()]
     [int]$enabled='-1',
     [Parameter()]
-    [int]$save = $false,
+    [int]$save='0',
     # Port Settings Information
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [string]$speed,
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [int]$flow
 )
+Set-Variable -Name save -Option AllScope
+$rootdir = Get-Location
 # Info needed for each page
 $pages = [pscustomobject]@{
     sysinfo = @{
@@ -56,6 +62,12 @@ $pages = [pscustomobject]@{
             cmd = "save"
         }
     }
+    backup = @{
+        url = "config_back.cgi"
+        body = @{
+            cmd = "conf_backup"
+        }
+    }
 }
 function Get-LoginCookie {
     param (
@@ -74,15 +86,10 @@ function Get-LoginCookie {
     return $hashedlogin
 }
 function Save-Settings {
-    if ($save -eq $true) {
-        $selectedbody = $pages.save.body
-        $selectedpage = $pages.save.url
-        Send-Request -url $url -username $username -password $password -selectedpage $pages.save.url -selectedbody $pages.save.body -selectedmethod 'POST'
-        Write-Host "[INFO] Settings Saved"
-    }
-    else {
-        Write-Host "[INFO] Remeber to save settings to keep them after reboot. Use -save or manually in the web gui".
-    }
+    $selectedbody = $pages.save.body
+    $selectedpage = $pages.save.url
+    Send-Request -url $url -username $username -password $password -selectedpage $pages.save.url -selectedbody $pages.save.body -selectedmethod 'POST'
+    Write-Host "[INFO] Settings Saved"
 }
 
 function Send-Request {
@@ -120,8 +127,8 @@ function Send-Request {
             -Headers $headers `
             -ContentType "application/x-www-form-urlencoded" `
             -UseBasicParsing
+        Write-Debug "[DEBUG] $request"
         return $response
-        Write-Debug "[DEBUG] $response"
     }
     catch {
         Write-Host "[ERROR] Failed to get response: $_"
@@ -145,7 +152,7 @@ switch ($PSCmdlet.ParameterSetName) {
             "100FD"    = 4
             "1000FD"   = 5
             "2500FD"   = 6
-            "5000FD"   = 7  # May be unsupported on your switch
+            "5000FD"   = 7  # May be unsupported, educated guess of what this value is meant to be
             "10000FD"  = 8
         }
         if ($speedMap.ContainsKey($speed)) {
@@ -157,8 +164,8 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.port.body.portid = $interface
         $selectedbody = $pages.port.body
         $selectedpage = $pages.port.url
-        $response = Send-Request -url $url -username $username -password $password -selectedpage $pages.port.url -selectedbody $pages.port.body -selectedmethod 'POST'
-        Write-Host "[INFO] Settings Applied"
+        Send-Request -url $url -username $username -password $password -selectedpage $pages.port.url -selectedbody $pages.port.body -selectedmethod 'POST'
+        Write-Host "[INFO] Settings applied"
     }
     'poe' {
         if ($interface -eq -1) {
@@ -171,13 +178,14 @@ switch ($PSCmdlet.ParameterSetName) {
         $pages.poe.body.portid = $interface
         $selectedbody = $pages.poe.body
         $selectedpage = $pages.poe.url
-        $response = Send-Request -url $url -username $username -password $password -selectedpage $pages.poe.url -selectedbody $pages.poe.body -selectedmethod 'POST'
-        Write-Host "[INFO] Settings Applied"
+        Send-Request -url $url -username $username -password $password -selectedpage $pages.poe.url -selectedbody $pages.poe.body -selectedmethod 'POST'
+        Write-Host "[INFO] Settings applied"
     }
     'sysinfo' {
         $selectedbody = $pages.sysinfo.body
         $selectedpage = $pages.sysinfo.url
         $html = Send-Request -url $url -username $username -password $password -selectedpage $pages.sysinfo.url -selectedbody $pages.sysinfo.body -selectedmethod 'GET'
+        $propBag = @{}
         $pattern = '<tr>\s*<th[^>]*>(.*?)</th>\s*<td[^>]*>(.*?)</td>'   # captures TH / TD pairs
         [regex]::Matches($html, $pattern, 'IgnoreCase') | ForEach-Object {
         $name, $value = $_.Groups[1].Value.Trim(), $_.Groups[2].Value.Trim()
@@ -195,6 +203,29 @@ switch ($PSCmdlet.ParameterSetName) {
             HardwareVersion = $propBag['Hardware Version']
         }
         $systeminfo
+        $save = 2 #As no need to save
+    }
+    'saveconfig' {
+        $save = 1
+        Save-Settings
+        $save = 2
+    }
+    'backup' {
+        $selectedbody = $pages.sysinfo.body
+        $selectedpage = $pages.sysinfo.url
     }
 }
-
+if ($save -eq 1) {
+    Save-Settings
+    $save = 2
+}
+if ($save -eq 2) {
+    Write-Debug "[DEBUG] Skipping saving again"
+}
+else {
+    $confirmsave = Read-Host "Do you want to save these settings? y/n"
+    if (("yes","ye","y" -contains ($confirmsave.ToLower())) -eq $true) {
+        $save = 1
+        Save-Settings
+    }
+}
