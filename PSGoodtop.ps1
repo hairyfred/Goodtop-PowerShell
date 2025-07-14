@@ -18,17 +18,12 @@ param(
     [int]$interface='-1',
     [Parameter()]
     [int]$enabled='-1',
-    [Parameter()]    
-    [string]$debug = $false,
     # Port Settings Information
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [string]$speed,
     [Parameter(Mandatory, ParameterSetName = 'port')]
     [int]$flow
 )
-if ($debug = $true) {
-    $DebugPreference = 'Continue'
-}
 # Info needed for each page
 $pages = [pscustomobject]@{
     sysinfo = @{
@@ -66,7 +61,7 @@ function Get-LoginCookie {
     $hashBytes = $md5.ComputeHash($bytes)
     $hashedlogin = (-join ($hashBytes | ForEach-Object { $_.ToString("x2") }))
 
-    Write-Host "[DEBUG] Hashed login = $hashedlogin"
+    Write-Debug "[DEBUG] Hashed login = $hashedlogin"
     return $hashedlogin
 }
 
@@ -107,7 +102,7 @@ function Send-Request {
             -ContentType "application/x-www-form-urlencoded" `
             -UseBasicParsing
         return $response
-        Write-Host "[DEBUG] $response"
+        Write-Debug "[DEBUG] $response"
     }
     catch {
         Write-Host "[ERROR] Failed to get response: $_"
